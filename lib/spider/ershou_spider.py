@@ -6,6 +6,8 @@
 
 import re
 import threadpool
+import sys
+import codecs,csv
 from bs4 import BeautifulSoup
 from lib.item.ershou import *
 from lib.zone.city import get_city
@@ -18,6 +20,9 @@ import lib.utility.version
 
 
 class ErShouSpider(BaseSpider):
+
+    districtCsv = ''
+
     def collect_area_ershou_data(self, city_name, area_name, fmt="csv"):
         """
         对于每个板块,获得这个板块下所有二手房的信息
@@ -29,8 +34,9 @@ class ErShouSpider(BaseSpider):
         """
         district_name = area_dict.get(area_name, "")
         csv_file = self.today_path + "/{0}_{1}.csv".format(district_name, area_name)
-        with open(csv_file, "w") as f:
+        with codecs.open(csv_file, "w+", 'utf_8_sig') as f:
             # 开始获得需要的板块数据
+            writer = csv.writer(f)
             ershous = self.get_area_ershou_info(city_name, area_name)
             # 锁定，多线程读写
             if self.mutex.acquire(1):
@@ -39,8 +45,10 @@ class ErShouSpider(BaseSpider):
                 self.mutex.release()
             if fmt == "csv":
                 for ershou in ershous:
-                    # print(date_string + "," + xiaoqu.text())
-                    f.write(self.date_string + "," + ershou.text() + "\n")
+                    print(self.date_string + "," + ershou.text())
+                    writer.writerow(ershou.text().split(','))
+                    # f.write(self.date_string + "," + ershou.text() + "\n")
+                    f.flush()
         print("Finish crawl area: " + area_name + ", save data to : " + csv_file)
 
     @staticmethod
@@ -55,9 +63,10 @@ class ErShouSpider(BaseSpider):
         district_name = area_dict.get(area_name, "")
         # 中文区县
         chinese_district = get_chinese_district(district_name)
+        if chinese_district is None:
+            chinese_district = city_name
         # 中文版块
         chinese_area = chinese_area_dict.get(area_name, "")
-
         ershou_list = list()
         page = 'http://{0}.{1}.com/ershoufang/{2}/'.format(city_name, SPIDER_NAME, area_name)
         print(page)  # 打印版块页面地址
@@ -75,6 +84,7 @@ class ErShouSpider(BaseSpider):
             print("\tWarning: only find one page for {0}".format(area_name))
             print(e)
 
+        #total_page = 1
         # 从第一页开始,一直遍历到最后一页
         for num in range(1, total_page + 1):
             page = 'http://{0}.{1}.com/ershoufang/{2}/pg{3}'.format(city_name, SPIDER_NAME, area_name, num)
@@ -91,18 +101,33 @@ class ErShouSpider(BaseSpider):
                 price = house_elem.find('div', class_="totalPrice")
                 name = house_elem.find('div', class_='title')
                 desc = house_elem.find('div', class_="houseInfo")
+                position = house_elem.find('div', class_="positionInfo")
+                url = house_elem.find('a', class_="maidian-detail")
                 pic = house_elem.find('a', class_="img").find('img', class_="lj-lazy")
 
                 # 继续清理数据
                 price = price.text.strip()
                 name = name.text.replace("\n", "")
+                name = name.replace(",", "_")
                 desc = desc.text.replace("\n", "").strip()
+                desc = desc.replace(" ", "")
+                desc = ' '.join(desc.split()).split('|')
+                lencnt = len(desc)
+                desc.append(price.replace("万", ''))
+                if lencnt >= 3:
+                    desc.append(desc[2].replace('平米', ''))
+                desc = ','.join(desc)
+                position = position.text.replace("\n", "").strip()
+                position = ' '.join(position.split()).split(" ")
+                if len(position) == 1:
+                    position.append(' ')
+                position = ','.join(position)
+                url = url['href']
                 pic = pic.get('data-original').strip()
                 # print(pic)
-
-
                 # 作为对象保存
-                ershou = ErShou(chinese_district, chinese_area, name, price, desc, pic)
+                ershou = ErShou(chinese_district, chinese_area, name, price, desc, position, url, pic)
+                ErShouSpider.districtCsv.writerow(ershou.text().split(','));
                 ershou_list.append(ershou)
         return ershou_list
 
@@ -113,9 +138,19 @@ class ErShouSpider(BaseSpider):
         t1 = time.time()  # 开始计时
 
         # 获得城市有多少区列表, district: 区县
-        districts = get_districts(city)
+        # districts = get_districts(city)
+        # 只抓取指定区
+        if len(sys.argv) == 3:
+            districts = get_districts(city, sys.argv[2])
+        else:
+            districts = get_districts(city)
         print('City: {0}'.format(city))
         print('Districts: {0}'.format(districts))
+
+        # 按城市统一写入到一个文件中
+        district_file = self.today_path + "/city_{0}.csv".format(city)
+        df = codecs.open(district_file, "w+", 'utf_8_sig')
+        ErShouSpider.districtCsv = csv.writer(df)
 
         # 获得每个区的板块, area: 板块
         areas = list()
@@ -127,6 +162,8 @@ class ErShouSpider(BaseSpider):
             # 使用一个字典来存储区县和板块的对应关系, 例如{'beicai': 'pudongxinqu', }
             for area in areas_of_district:
                 area_dict[area] = district
+        #area_dict['huangxinggongyuan'] = district
+        #areas = ['huangxinggongyuan']
         print("Area:", areas)
         print("District and areas:", area_dict)
 

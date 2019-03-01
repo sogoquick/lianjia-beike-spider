@@ -25,7 +25,7 @@ def get_chinese_district(en):
     return chinese_city_district_dict.get(en, None)
 
 
-def get_districts(city):
+def get_districts(city, districts=None):
     """
     获取各城市的区县中英文对照信息
     :param city: 城市
@@ -41,11 +41,16 @@ def get_districts(city):
     ch_names = list()
     for element in elements:
         link = element.attrib['href']
-        en_names.append(link.split('/')[-2])
+        district_en = link.split('/')[-2]
+        if districts is not None and districts != district_en:
+            continue
+        en_names.append(district_en)
         ch_names.append(element.text)
 
         # 打印区县英文和中文名列表
     for index, name in enumerate(en_names):
+        if districts is not None and districts != name:
+            continue
         chinese_city_district_dict[name] = ch_names[index]
         # print(name + ' -> ' + ch_names[index])
     return en_names

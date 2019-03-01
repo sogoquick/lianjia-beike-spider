@@ -6,12 +6,14 @@
 
 
 class ErShou(object):
-    def __init__(self, district, area, name, price, desc, pic):
+    def __init__(self, district, area, name, price, desc, position, url, pic):
         self.district = district
         self.area = area
         self.price = price
         self.name = name
         self.desc = desc
+        self.position = position
+        self.url = url
         self.pic = pic
 
     def text(self):
@@ -20,4 +22,6 @@ class ErShou(object):
                 self.name + "," + \
                 self.price + "," + \
                 self.desc + "," + \
+                self.position + "," + \
+                self.url + "," + \
                 self.pic
