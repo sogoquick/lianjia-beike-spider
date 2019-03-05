@@ -45,7 +45,7 @@ class ErShouSpider(BaseSpider):
                 self.mutex.release()
             if fmt == "csv":
                 for ershou in ershous:
-                    print(self.date_string + "," + ershou.text())
+                    #print(self.date_string + "," + ershou.text())
                     writer.writerow(ershou.text().split(','))
                     # f.write(self.date_string + "," + ershou.text() + "\n")
                     f.flush()
@@ -113,21 +113,38 @@ class ErShouSpider(BaseSpider):
                 desc = desc.replace(" ", "")
                 desc = ' '.join(desc.split()).split('|')
                 lencnt = len(desc)
+                if lencnt < 4:
+                    desc.append('')
                 desc.append(price.replace("万", ''))
                 if lencnt >= 3:
                     desc.append(desc[2].replace('平米', ''))
+                else:
+                    desc.append('')
                 desc = ','.join(desc)
                 position = position.text.replace("\n", "").strip()
                 position = ' '.join(position.split()).split(" ")
-                if len(position) == 1:
+                lenpos = len(position)
+                if lenpos == 1:
                     position.append(' ')
+                else:
+                    position[1] = position[1].replace('年建', '')
+                if lenpos >= 1:
+                    positiontwo = position[1]
+                    position[1] = position[0][3::]
+                    position[0] = position[0][0:3]
+                    _loutotal = re.findall(r"\d+", position[1])
+                    loutotal = '0'
+                    if len(_loutotal) > 0:
+                        loutotal = '' + _loutotal[0]
+                    position.append(loutotal)
+                    position.append(positiontwo)
                 position = ','.join(position)
                 url = url['href']
                 pic = pic.get('data-original').strip()
                 # print(pic)
                 # 作为对象保存
                 ershou = ErShou(chinese_district, chinese_area, name, price, desc, position, url, pic)
-                ErShouSpider.districtCsv.writerow(ershou.text().split(','));
+                ErShouSpider.districtCsv.writerow(ershou.text().split(','))
                 ershou_list.append(ershou)
         return ershou_list
 
@@ -149,8 +166,9 @@ class ErShouSpider(BaseSpider):
 
         # 按城市统一写入到一个文件中
         district_file = self.today_path + "/city_{0}.csv".format(city)
-        df = codecs.open(district_file, "w+", 'utf_8_sig')
+        df = codecs.open(district_file, "w", 'utf_8_sig')
         ErShouSpider.districtCsv = csv.writer(df)
+        ErShouSpider.districtCsv.writerow(['区域', '板块', '标题', '价格', '小区', '户型', '面积', '朝向', '价格', '面积', '楼层位置', '总楼层数', '总楼层数', '修建时间', '链接'])
 
         # 获得每个区的板块, area: 板块
         areas = list()
